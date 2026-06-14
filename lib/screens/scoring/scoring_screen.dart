@@ -24,7 +24,8 @@ class _ScoringScreenState extends State<ScoringScreen> {
 
   void _setupOpeners() async {
     final provider = context.read<MatchProvider>();
-    final inn = provider.currentMatch!.currentInnings!;
+    final inn = provider.currentMatch!.currentInnings; // remove !
+    if (inn == null) return;
 
     final striker = await _showPlayerPicker(
       'Select Striker (Opening Batsman)',
@@ -44,7 +45,8 @@ class _ScoringScreenState extends State<ScoringScreen> {
 
   Future<void> _askNextBowler() async {
     final provider = context.read<MatchProvider>();
-    final inn = provider.currentMatch!.currentInnings!;
+    final inn = provider.currentMatch!.currentInnings;
+    if (inn == null) return;
     final bowler = await _showPlayerPicker(
       'Select Bowler',
       inn.bowlingTeam.players,
