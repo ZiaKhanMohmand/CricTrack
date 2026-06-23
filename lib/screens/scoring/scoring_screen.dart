@@ -320,6 +320,135 @@ class _ScoringScreenState extends State<ScoringScreen> {
     );
   }
 
+  Future<void> _askDismissalType() async {
+    final isRunOut = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: const Color(0xFF1e293b),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: Text(
+                'How was the batsman out?',
+                style: TextStyle(color: Colors.white, fontSize: 16),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1B5E20),
+                minimumSize: const Size(double.infinity, 44),
+              ),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text(
+                'Bowled / Caught / LBW',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.red,
+                side: const BorderSide(color: Colors.red),
+                minimumSize: const Size(double.infinity, 44),
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Run Out'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (isRunOut == null) return; // dismissed — re-tap to retry
+
+    if (isRunOut) {
+      await _askRunOutRuns();
+    } else {
+      // No runs added — dismissal happened before any run completed.
+      _onBallTapped(BallEvent(isWicket: true));
+    }
+  }
+
+  Future<void> _askRunOutRuns() async {
+    final completedRuns = await showModalBottomSheet<int>(
+      context: context,
+      backgroundColor: const Color(0xFF1e293b),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: Text(
+                'Run Out — runs completed before the dismissal?',
+                style: TextStyle(color: Colors.white, fontSize: 16),
+              ),
+            ),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [0, 1, 2, 3].map((r) {
+                return ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1B5E20),
+                  ),
+                  onPressed: () => Navigator.pop(ctx, r),
+                  child: Text(
+                    '$r',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (completedRuns == null) return; // dismissed — re-tap to retry
+
+    final provider = context.read<MatchProvider>();
+    final inn = provider.currentMatch!.currentInnings!;
+    final striker = inn.striker;
+    final nonStriker = inn.nonStriker;
+    if (!mounted) return;
+    final dismissed = await showDialog<Player>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Who got run out?'),
+        content: const Text(
+          'Pick the end where the fielding side broke the stumps.',
+        ),
+        actions: [
+          if (striker != null)
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, striker),
+              child: Text('${striker.name} (striker)'),
+            ),
+          if (nonStriker != null)
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, nonStriker),
+              child: Text('${nonStriker.name} (non-striker)'),
+            ),
+        ],
+      ),
+    );
+    if (dismissed == null) return; // shouldn't happen, barrier blocked
+
+    final overWasComplete = inn.currentOver?.isComplete ?? false;
+    provider.runOutFairBall(dismissed, completedRuns);
+    await _afterBallFlow(overWasComplete: overWasComplete, wasWicket: true);
+  }
+
   void _onRetireHurt() {
     final provider = context.read<MatchProvider>();
     final inn = provider.currentMatch?.currentInnings;
@@ -1130,7 +1259,7 @@ class _ScoringScreenState extends State<ScoringScreen> {
                             'WICKET',
                             Colors.red.shade100,
                             Colors.red,
-                            () => _onBallTapped(BallEvent(isWicket: true)),
+                            () => _askDismissalType(),
                           ),
                           const SizedBox(width: 8),
                           _extraBtn(

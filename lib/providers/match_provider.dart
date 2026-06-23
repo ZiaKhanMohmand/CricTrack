@@ -182,6 +182,58 @@ class MatchProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Run-out on a fair/legal delivery: runs completed before the run-out
+  // still count, ball counts as legal (consumes an over-ball), bowler gets
+  // no wicket credit (run-out is never the bowler's dismissal), and the
+  // specific dismissed batsman is passed in explicitly since the model
+  // can't infer which end was broken.
+  void runOutFairBall(Player dismissed, int completedRuns) {
+    final inn = currentMatch!.currentInnings!;
+    final over = inn.currentOver;
+    if (over == null) return;
+
+    final event = BallEvent(runs: completedRuns, isWicket: true);
+    over.balls.add(event);
+
+    final bowler = inn.currentBowler!;
+    bowler.runsConceded += completedRuns;
+    bowler.ballsInCurrentOver++;
+    // No wicketsTaken++ here — run-out is never credited to the bowler.
+
+    if (completedRuns > 0) {
+      // Bat-runs credited to whoever was on strike when the shot was hit,
+      // regardless of which end the run-out happens at.
+      final striker = inn.striker;
+      if (striker != null) {
+        striker.runs += completedRuns;
+        striker.ballsFaced++;
+        if (completedRuns == 4) striker.balls4s++;
+        if (completedRuns == 6) striker.balls6s++;
+      }
+    } else {
+      final striker = inn.striker;
+      if (striker != null) striker.ballsFaced++;
+    }
+
+    dismissed.isOut = true;
+    if (inn.striker?.id == dismissed.id) {
+      inn.striker = null;
+    } else if (inn.nonStriker?.id == dismissed.id) {
+      inn.nonStriker = null;
+    }
+
+    // No strike rotation here: with one end now vacant, the surviving
+    // batsman keeps their current end. _askNextBatsman() fills the gap.
+
+    if (over.isComplete) {
+      bowler.oversBowled++;
+      bowler.ballsInCurrentOver = 0;
+      if (inn.nonStriker != null) _rotateStrike();
+    }
+
+    notifyListeners();
+  }
+
   void _rotateStrike() {
     final inn = currentMatch!.currentInnings!;
     if (inn.nonStriker == null) return; // last man alone, no rotate
