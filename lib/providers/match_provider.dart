@@ -75,7 +75,11 @@ class MatchProvider extends ChangeNotifier {
 
   void addBall(BallEvent event) {
     final inn = currentMatch!.currentInnings!;
-    final over = inn.currentOver!;
+    final over = inn.currentOver;
+    if (over == null) {
+      // No bowler selected yet — caller must select bowler first.
+      return;
+    }
 
     over.balls.add(event);
 

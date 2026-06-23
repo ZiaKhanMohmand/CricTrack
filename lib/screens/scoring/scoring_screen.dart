@@ -49,11 +49,20 @@ class _ScoringScreenState extends State<ScoringScreen> {
     final provider = context.read<MatchProvider>();
     final inn = provider.currentMatch!.currentInnings;
     if (inn == null) return;
-    final bowler = await _showPlayerPicker(
-      'Select Bowler',
-      inn.bowlingTeam.players,
-    );
-    if (bowler == null) return;
+
+    Player? bowler;
+    while (bowler == null) {
+      bowler = await _showPlayerPicker(
+        'Select Bowler',
+        inn.bowlingTeam.players,
+      );
+      if (bowler == null && mounted) {
+        // Dismissed without picking — bowler is mandatory, ask again.
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('You must select a bowler to continue')),
+        );
+      }
+    }
     provider.setCurrentBowler(bowler);
   }
 
