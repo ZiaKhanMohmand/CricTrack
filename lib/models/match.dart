@@ -4,6 +4,20 @@ import 'team.dart';
 enum MatchState { setup, toss, innings1, innings2, completed }
 
 class BallEvent {
+  Map<String, dynamic> toJson() => {
+    'runs': runs,
+    'isWicket': isWicket,
+    'isWide': isWide,
+    'isNoBall': isNoBall,
+  };
+
+  factory BallEvent.fromJson(Map<String, dynamic> j) => BallEvent(
+    runs: j['runs'],
+    isWicket: j['isWicket'],
+    isWide: j['isWide'],
+    isNoBall: j['isNoBall'],
+  );
+
   final int runs;
   final bool isWicket;
   final bool isWide;
@@ -25,6 +39,14 @@ class BallEvent {
 }
 
 class Over {
+  Map<String, dynamic> toJson() => {
+    'bowler': bowler.toJson(),
+    'balls': balls.map((b) => b.toJson()).toList(),
+  };
+
+  factory Over.fromJson(Map<String, dynamic> j) => Over(
+    bowler: Player.fromJson(j['bowler']),
+  )..balls = (j['balls'] as List).map((b) => BallEvent.fromJson(b)).toList();
   final Player bowler;
   List<BallEvent> balls;
 
@@ -38,6 +60,16 @@ class Over {
 }
 
 class Innings {
+  Map<String, dynamic> toJson() => {
+    'battingTeam': battingTeam.toJson(),
+    'bowlingTeam': bowlingTeam.toJson(),
+    'overs': overs.map((o) => o.toJson()).toList(),
+  };
+
+  factory Innings.fromJson(Map<String, dynamic> j) => Innings(
+    battingTeam: Team.fromJson(j['battingTeam']),
+    bowlingTeam: Team.fromJson(j['bowlingTeam']),
+  )..overs = (j['overs'] as List).map((o) => Over.fromJson(o)).toList();
   final Team battingTeam;
   final Team bowlingTeam;
   List<Over> overs;

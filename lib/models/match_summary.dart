@@ -1,3 +1,5 @@
+import 'match.dart';
+
 class MatchSummary {
   final String id;
   final String team1Name;
@@ -6,6 +8,8 @@ class MatchSummary {
   final String team2Score;
   final String? winnerName;
   final DateTime playedAt;
+  final Innings? innings1;
+  final Innings? innings2;
 
   MatchSummary({
     required this.id,
@@ -15,6 +19,8 @@ class MatchSummary {
     required this.team2Score,
     required this.winnerName,
     required this.playedAt,
+    this.innings1,
+    this.innings2,
   });
 
   Map<String, dynamic> toJson() => {
@@ -25,6 +31,8 @@ class MatchSummary {
     'team2Score': team2Score,
     'winnerName': winnerName,
     'playedAt': playedAt.toIso8601String(),
+    'innings1': innings1?.toJson(),
+    'innings2': innings2?.toJson(),
   };
 
   factory MatchSummary.fromJson(Map<String, dynamic> json) => MatchSummary(
@@ -35,5 +43,11 @@ class MatchSummary {
     team2Score: json['team2Score'],
     winnerName: json['winnerName'],
     playedAt: DateTime.parse(json['playedAt']),
+    innings1: json['innings1'] != null
+        ? Innings.fromJson(json['innings1'])
+        : null,
+    innings2: json['innings2'] != null
+        ? Innings.fromJson(json['innings2'])
+        : null,
   );
 }

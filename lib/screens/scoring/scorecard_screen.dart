@@ -5,22 +5,26 @@ import '../../models/player.dart';
 class ScorecardScreen extends StatelessWidget {
   final Innings innings;
   final String title;
+  final bool showAppBar;
 
   const ScorecardScreen({
     super.key,
     required this.innings,
     required this.title,
+    this.showAppBar = true,
   });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
-      appBar: AppBar(
-        title: Text(title),
-        backgroundColor: const Color(0xFF1B5E20),
-        foregroundColor: Colors.white,
-      ),
+      appBar: showAppBar
+          ? AppBar(
+              title: Text(title),
+              backgroundColor: const Color(0xFF1B5E20),
+              foregroundColor: Colors.white,
+            )
+          : null,
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -71,7 +75,9 @@ class ScorecardScreen extends StatelessWidget {
                   _tableHeader(['Batter', 'R', 'B', '4s', '6s', 'SR']),
                   const Divider(height: 1),
                   ...innings.battingTeam.players
-                      .where((p) => p.ballsFaced > 0 || p.isOut)
+                      .where(
+                        (p) => p.ballsFaced > 0 || p.isOut || p.retiredHurt,
+                      )
                       .map((p) => _batsmanRow(p)),
                 ],
               ),
@@ -179,10 +185,18 @@ class ScorecardScreen extends StatelessWidget {
                   style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
                 Text(
-                  p.isOut ? 'out' : 'not out',
+                  p.isOut
+                      ? 'out'
+                      : p.retiredHurt
+                      ? 'retired hurt'
+                      : 'not out',
                   style: TextStyle(
                     fontSize: 11,
-                    color: p.isOut ? Colors.red : Colors.green,
+                    color: p.isOut
+                        ? Colors.red
+                        : p.retiredHurt
+                        ? Colors.orange
+                        : Colors.green,
                   ),
                 ),
               ],

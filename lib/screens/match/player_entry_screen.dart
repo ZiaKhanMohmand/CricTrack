@@ -26,8 +26,12 @@ class _PlayerEntryScreenState extends State<PlayerEntryScreen> {
 
   @override
   void dispose() {
-    for (final c in _team1Controllers) c.dispose();
-    for (final c in _team2Controllers) c.dispose();
+    for (final c in _team1Controllers) {
+      c.dispose();
+    }
+    for (final c in _team2Controllers) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -95,12 +99,14 @@ class _PlayerEntryScreenState extends State<PlayerEntryScreen> {
                 ),
                 onPressed: () {
                   for (final c in _team1Controllers) {
-                    if (c.text.isNotEmpty)
+                    if (c.text.isNotEmpty) {
                       provider.addPlayerToTeam(match.team1, c.text);
+                    }
                   }
                   for (final c in _team2Controllers) {
-                    if (c.text.isNotEmpty)
+                    if (c.text.isNotEmpty) {
                       provider.addPlayerToTeam(match.team2, c.text);
+                    }
                   }
                   Navigator.push(
                     context,

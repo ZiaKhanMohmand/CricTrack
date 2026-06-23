@@ -1,3 +1,4 @@
+import 'package:cric_track/screens/scoring/scorecard_screen.dart';
 import 'package:flutter/material.dart';
 import '../../models/match_summary.dart';
 import '../../services/history_service.dart';
@@ -60,88 +61,148 @@ class _HistoryScreenState extends State<HistoryScreen> {
               final m = matches[i];
               final isWin1 = m.winnerName == m.team1Name;
               final isWin2 = m.winnerName == m.team2Name;
-              return Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              m.team1Name,
-                              style: TextStyle(
-                                fontWeight: isWin1
-                                    ? FontWeight.bold
-                                    : FontWeight.normal,
-                                color: isWin1
-                                    ? const Color(0xFF1B5E20)
-                                    : Colors.black,
-                              ),
-                            ),
-                            Text(
-                              m.team2Name,
-                              style: TextStyle(
-                                fontWeight: isWin2
-                                    ? FontWeight.bold
-                                    : FontWeight.normal,
-                                color: isWin2
-                                    ? const Color(0xFF1B5E20)
-                                    : Colors.black,
-                              ),
-                            ),
-                          ],
+              return GestureDetector(
+                onTap: () {
+                  if (m.innings1 == null) return;
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => DraggableScrollableSheet(
+                      initialChildSize: 0.9,
+                      builder: (_, ctrl) => ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(20),
                         ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              m.team1Score,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
+                        child: DefaultTabController(
+                          length: m.innings2 != null ? 2 : 1,
+                          child: Scaffold(
+                            appBar: AppBar(
+                              backgroundColor: const Color(0xFF1B5E20),
+                              foregroundColor: Colors.white,
+                              title: Text('${m.team1Name} vs ${m.team2Name}'),
+                              bottom: m.innings2 != null
+                                  ? TabBar(
+                                      labelColor: Colors.white,
+                                      tabs: [
+                                        Tab(text: '${m.team1Name} Innings'),
+                                        Tab(text: '${m.team2Name} Innings'),
+                                      ],
+                                    )
+                                  : null,
                             ),
-                            Text(
-                              m.team2Score,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          m.winnerName != null
-                              ? '🏆 ${m.winnerName} won'
-                              : '🤝 Tied',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey,
+                            body: m.innings2 != null
+                                ? TabBarView(
+                                    children: [
+                                      ScorecardScreen(
+                                        innings: m.innings1!,
+                                        title: '',
+                                        showAppBar: false,
+                                      ),
+                                      ScorecardScreen(
+                                        innings: m.innings2!,
+                                        title: '',
+                                        showAppBar: false,
+                                      ),
+                                    ],
+                                  )
+                                : ScorecardScreen(
+                                    innings: m.innings1!,
+                                    title: '',
+                                    showAppBar: false,
+                                  ),
                           ),
                         ),
-                        Text(
-                          '${m.playedAt.day}/${m.playedAt.month}/${m.playedAt.year}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ],
+                  );
+                },
+
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black12, blurRadius: 4),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                m.team1Name,
+                                style: TextStyle(
+                                  fontWeight: isWin1
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                  color: isWin1
+                                      ? const Color(0xFF1B5E20)
+                                      : Colors.black,
+                                ),
+                              ),
+                              Text(
+                                m.team2Name,
+                                style: TextStyle(
+                                  fontWeight: isWin2
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                  color: isWin2
+                                      ? const Color(0xFF1B5E20)
+                                      : Colors.black,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                m.team1Score,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                m.team2Score,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            m.winnerName != null
+                                ? '🏆 ${m.winnerName} won'
+                                : '🤝 Tied',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          Text(
+                            '${m.playedAt.day}/${m.playedAt.month}/${m.playedAt.year}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               );
             },

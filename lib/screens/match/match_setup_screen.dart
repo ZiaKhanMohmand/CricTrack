@@ -129,7 +129,7 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
                 const Text('Last Man Stands: ', style: TextStyle(fontSize: 16)),
                 Switch(
                   value: _lastManStands,
-                  activeColor: const Color(0xFF1B5E20),
+                  activeThumbColor: const Color(0xFF1B5E20),
                   onChanged: (v) => setState(() => _lastManStands = v),
                 ),
                 Text(
@@ -150,8 +150,9 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
                 ),
                 onPressed: () {
                   if (_team1Controller.text.isEmpty ||
-                      _team2Controller.text.isEmpty)
+                      _team2Controller.text.isEmpty) {
                     return;
+                  }
 
                   final int? finalOvers = _isCustomOvers
                       ? int.tryParse(_customOversController.text)

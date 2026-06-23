@@ -86,13 +86,17 @@ class MatchProvider extends ChangeNotifier {
 
     if (!event.isWide && !event.isNoBall) {
       bowler.ballsInCurrentOver++;
-      final facingBatter = inn.striker!; // capture BEFORE rotation
+      final facingBatter = inn.striker;
+      if (facingBatter == null) return;
       facingBatter.runs += event.runs;
       if (event.runs == 4) facingBatter.balls4s++;
       if (event.runs == 6) facingBatter.balls6s++;
       facingBatter.ballsFaced++;
       if (event.runs % 2 != 0) _rotateStrike();
-      if (event.isWicket) facingBatter.isOut = true; // mark correct player
+      if (event.isWicket) {
+        facingBatter.isOut = true;
+        inn.striker = null; // clear striker immediately on wicket
+      }
     }
 
     if (over.isComplete) {
@@ -113,7 +117,12 @@ class MatchProvider extends ChangeNotifier {
   }
 
   void setNextBatsman(Player player) {
-    currentMatch!.currentInnings!.striker = player;
+    final inn = currentMatch!.currentInnings!;
+    if (inn.striker == null) {
+      inn.striker = player;
+    } else {
+      inn.nonStriker = player; // fill vacant nonStriker slot
+    }
     notifyListeners();
   }
 
@@ -122,6 +131,42 @@ class MatchProvider extends ChangeNotifier {
     inn.striker = inn.nonStriker;
     inn.nonStriker = null;
     notifyListeners();
+  }
+
+  void retireHurt(Player player) {
+    final inn = currentMatch?.currentInnings;
+    if (inn == null) return;
+    player.retiredHurt = true;
+
+    final wasStriker = inn.striker?.id == player.id;
+    if (inn.striker?.id == player.id) inn.striker = null;
+    if (inn.nonStriker?.id == player.id) inn.nonStriker = null;
+
+    // if striker retired + nonStriker exists → promote nonStriker to strike
+    if (wasStriker && inn.nonStriker != null) {
+      inn.striker = inn.nonStriker;
+      inn.nonStriker = null;
+    }
+
+    notifyListeners();
+  }
+
+  void returnFromRetirement(Player player) {
+    final inn = currentMatch?.currentInnings;
+    if (inn == null) return;
+    player.retiredHurt = false;
+    if (inn.striker == null) {
+      inn.striker = player; // fill vacant striker slot first
+    } else {
+      inn.nonStriker = player;
+    }
+    notifyListeners();
+  }
+
+  List<Player> get retiredHurtPlayers {
+    final inn = currentMatch?.currentInnings;
+    if (inn == null) return [];
+    return inn.battingTeam.players.where((p) => p.retiredHurt).toList();
   }
 
   // --- INNINGS / MATCH END ---
@@ -158,20 +203,20 @@ class MatchProvider extends ChangeNotifier {
     final last = over.balls.removeLast();
     final bowler = inn.currentBowler!;
 
-    // reverse bowler stats
     bowler.runsConceded -= last.runs;
     if (last.isWicket) bowler.wicketsTaken--;
 
     if (!last.isWide && !last.isNoBall) {
-      // reverse striker stats
-      inn.striker!.runs -= last.runs;
-      inn.striker!.ballsFaced--;
+      bowler.ballsInCurrentOver--;
 
-      // reverse strike rotation
       if (last.runs % 2 != 0) _rotateStrike();
 
-      // reverse wicket
-      if (last.isWicket) inn.striker!.isOut = false;
+      final batter = inn.striker;
+      if (batter != null) {
+        batter.runs -= last.runs;
+        batter.ballsFaced--;
+        if (last.isWicket) batter.isOut = false;
+      }
     }
 
     notifyListeners();
@@ -185,6 +230,31 @@ class MatchProvider extends ChangeNotifier {
   void setToss(Team tossWinner, Team battingFirst) {
     currentMatch!.tossWinner = tossWinner;
     currentMatch!.battingFirst = battingFirst;
+    notifyListeners();
+  }
+
+  void abandonMatch() {
+    currentMatch = null;
+    notifyListeners();
+  }
+
+  void changeStriker(Player player) {
+    currentMatch!.currentInnings!.striker = player;
+    notifyListeners();
+  }
+
+  void changeNonStriker(Player player) {
+    currentMatch!.currentInnings!.nonStriker = player;
+    notifyListeners();
+  }
+
+  void changeBowler(Player player) {
+    final inn = currentMatch!.currentInnings!;
+    if (inn.overs.isNotEmpty && (inn.currentOver?.balls.isEmpty ?? false)) {
+      inn.overs.removeLast();
+    }
+    inn.currentBowler = player;
+    inn.overs.add(Over(bowler: player));
     notifyListeners();
   }
 }
