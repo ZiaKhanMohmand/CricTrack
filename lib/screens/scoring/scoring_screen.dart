@@ -215,6 +215,111 @@ class _ScoringScreenState extends State<ScoringScreen> {
     }
   }
 
+  Future<void> _askNoBallRuns() async {
+    final result = await showModalBottomSheet<(int, bool)>(
+      context: context,
+      backgroundColor: const Color(0xFF1e293b),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: Text(
+                'No Ball — runs scored off the bat?',
+                style: TextStyle(color: Colors.white, fontSize: 16),
+              ),
+            ),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [0, 1, 2, 3, 4, 6].map((r) {
+                return ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1B5E20),
+                  ),
+                  onPressed: () => Navigator.pop(ctx, (r, false)),
+                  child: Text(
+                    '$r',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Run out while running? (bowled/caught/LBW don\'t count on a no-ball — pick 0 above instead)',
+              style: TextStyle(color: Colors.white70, fontSize: 12),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [0, 1, 2, 3].map((r) {
+                return OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red,
+                    side: const BorderSide(color: Colors.red),
+                  ),
+                  onPressed: () => Navigator.pop(ctx, (r, true)),
+                  child: Text('Run Out ($r run${r == 1 ? '' : 's'} completed)'),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (result == null)
+      return; // dismissed — no-ball not recorded, re-tap to retry
+    final (batRuns, isRunOut) = result;
+
+    if (isRunOut) {
+      final provider = context.read<MatchProvider>();
+      final inn = provider.currentMatch!.currentInnings!;
+      final striker = inn.striker;
+      final nonStriker = inn.nonStriker;
+      if (!mounted) return;
+      final dismissed = await showDialog<Player>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Who got run out?'),
+          content: const Text(
+            'Pick the end where the fielding side broke the stumps.',
+          ),
+          actions: [
+            if (striker != null)
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, striker),
+                child: Text('${striker.name} (striker)'),
+              ),
+            if (nonStriker != null)
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, nonStriker),
+                child: Text('${nonStriker.name} (non-striker)'),
+              ),
+          ],
+        ),
+      );
+      if (dismissed == null) return; // shouldn't happen, barrier blocked
+      final overWasComplete = inn.currentOver?.isComplete ?? false;
+      provider.runOutNoBall(dismissed, batRuns);
+      await _afterBallFlow(overWasComplete: overWasComplete, wasWicket: true);
+      return;
+    }
+
+    // Total team runs = 1 (no-ball penalty) + completed runs off the bat.
+    _onBallTapped(
+      BallEvent(isNoBall: true, runs: 1 + batRuns, batRuns: batRuns),
+    );
+  }
+
   void _onRetireHurt() {
     final provider = context.read<MatchProvider>();
     final inn = provider.currentMatch?.currentInnings;
@@ -390,6 +495,24 @@ class _ScoringScreenState extends State<ScoringScreen> {
 
     provider.addBall(event);
 
+    await _afterBallFlow(
+      overWasComplete: overWasComplete,
+      wasWicket: event.isWicket,
+    );
+  }
+
+  // Shared post-ball flow: target check, next-batsman prompt, next-bowler
+  // prompt, innings-end check. Used by normal addBall path and by the
+  // no-ball-run-out path (which updates state via a dedicated provider call
+  // instead of addBall, but needs the same follow-up UI).
+  Future<void> _afterBallFlow({
+    required bool overWasComplete,
+    required bool wasWicket,
+  }) async {
+    final provider = context.read<MatchProvider>();
+    final match = provider.currentMatch!;
+    final inn = match.currentInnings!;
+
     if (match.state == MatchState.innings2) {
       final target = match.innings1!.totalRuns + 1;
       if (inn.totalRuns >= target) {
@@ -398,9 +521,9 @@ class _ScoringScreenState extends State<ScoringScreen> {
       }
     }
 
-    if (event.isWicket) await _askNextBatsman();
+    if (wasWicket) await _askNextBatsman();
 
-    if (!event.isWicket && !_battingAlone) {
+    if (!wasWicket && !_battingAlone) {
       final currentInn = provider.currentMatch!.currentInnings!;
       if (currentInn.nonStriker == null && !provider.isInningsOver) {
         final retired = provider.retiredHurtPlayers;
@@ -423,6 +546,34 @@ class _ScoringScreenState extends State<ScoringScreen> {
     }
 
     _checkInningsEnd();
+  }
+
+  Future<void> _confirmConcede(BuildContext context) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Concede Match?'),
+        content: const Text(
+          'Chase is mathematically unwinnable. End the match here and accept the loss?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep Playing'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Concede', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true && mounted) {
+      context.read<MatchProvider>().concedeChase();
+      _inningsEndHandled = true;
+      _showMatchResultDialog();
+    }
   }
 
   void _checkInningsEnd() {
@@ -677,49 +828,82 @@ class _ScoringScreenState extends State<ScoringScreen> {
                             final rrr = ballsLeft > 0
                                 ? (needed / (ballsLeft / 6)).toStringAsFixed(2)
                                 : '∞';
-                            return Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: needed <= 0
-                                    ? Colors.green.shade100
-                                    : Colors.orange.shade50,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: needed <= 0
-                                      ? Colors.green
-                                      : Colors.orange,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    'Target: $target',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
-                                    ),
+                            // Max possible runs left assumes every remaining
+                            // legal ball goes for 6 — anything beyond that,
+                            // chase is mathematically dead.
+                            final isUnchaseable =
+                                needed > 0 &&
+                                ballsLeft > 0 &&
+                                needed > ballsLeft * 6;
+                            return Column(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 6,
                                   ),
-                                  Text(
-                                    'Need $needed off $ballsLeft balls',
-                                    style: const TextStyle(fontSize: 13),
-                                  ),
-                                  Text(
-                                    'RRR: $rrr',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
+                                  decoration: BoxDecoration(
+                                    color: needed <= 0
+                                        ? Colors.green.shade100
+                                        : Colors.orange.shade50,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
                                       color: needed <= 0
                                           ? Colors.green
-                                          : Colors.orange.shade800,
+                                          : Colors.orange,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        'Target: $target',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      Text(
+                                        'Need $needed off $ballsLeft balls',
+                                        style: const TextStyle(fontSize: 13),
+                                      ),
+                                      Text(
+                                        'RRR: $rrr',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                          color: needed <= 0
+                                              ? Colors.green
+                                              : Colors.orange.shade800,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (isUnchaseable) ...[
+                                  const SizedBox(height: 8),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: OutlinedButton.icon(
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: Colors.red,
+                                        side: const BorderSide(
+                                          color: Colors.red,
+                                        ),
+                                      ),
+                                      icon: const Icon(
+                                        Icons.flag_outlined,
+                                        size: 18,
+                                      ),
+                                      label: const Text(
+                                        'Concede Match — Chase Unwinnable',
+                                      ),
+                                      onPressed: () => _confirmConcede(context),
                                     ),
                                   ),
                                 ],
-                              ),
+                              ],
                             );
                           },
                         ),
@@ -968,9 +1152,7 @@ class _ScoringScreenState extends State<ScoringScreen> {
                             'NO BALL',
                             Colors.grey.shade200,
                             Colors.black,
-                            () => _onBallTapped(
-                              BallEvent(isNoBall: true, runs: 1),
-                            ),
+                            () => _askNoBallRuns(),
                           ),
                         ],
                       ),

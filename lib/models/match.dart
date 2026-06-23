@@ -6,6 +6,7 @@ enum MatchState { setup, toss, innings1, innings2, completed }
 class BallEvent {
   Map<String, dynamic> toJson() => {
     'runs': runs,
+    'batRuns': batRuns,
     'isWicket': isWicket,
     'isWide': isWide,
     'isNoBall': isNoBall,
@@ -13,24 +14,31 @@ class BallEvent {
 
   factory BallEvent.fromJson(Map<String, dynamic> j) => BallEvent(
     runs: j['runs'],
+    batRuns:
+        j['batRuns'] ??
+        (j['isWide'] == true || j['isNoBall'] == true ? 0 : j['runs']),
     isWicket: j['isWicket'],
     isWide: j['isWide'],
     isNoBall: j['isNoBall'],
   );
 
-  final int runs;
+  final int runs; // total team runs charged this ball (incl. penalty)
+  final int
+  batRuns; // runs personally credited to batsman (0 on wide; bat-hit runs on no-ball)
   final bool isWicket;
   final bool isWide;
   final bool isNoBall;
 
   BallEvent({
     this.runs = 0,
+    int? batRuns,
     this.isWicket = false,
     this.isWide = false,
     this.isNoBall = false,
-  });
+  }) : batRuns = batRuns ?? runs;
 
   String get display {
+    if (isNoBall && batRuns > 0) return 'NB+$batRuns';
     if (isWicket) return 'W';
     if (isWide) return 'WD';
     if (isNoBall) return 'NB';

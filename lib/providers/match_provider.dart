@@ -101,12 +101,82 @@ class MatchProvider extends ChangeNotifier {
         facingBatter.isOut = true;
         inn.striker = null; // clear striker immediately on wicket
       }
+    } else if (event.isNoBall) {
+      // Illegal delivery, but bat-runs still count for the batsman and
+      // strike still rotates on odd runs. ballsFaced/legal-ball count
+      // intentionally skipped — no-ball doesn't consume an over-ball.
+      // NOTE: run-out off a no-ball must go through runOutNoBall() instead
+      // of this method — which batsman is out is ambiguous (striker's end
+      // or non-striker's end) and can't be inferred from a runs/wicket flag
+      // alone. addBall() assumes no-ball events here are never wickets.
+      final facingBatter = inn.striker;
+      if (facingBatter != null && event.batRuns > 0) {
+        facingBatter.runs += event.batRuns;
+        if (event.batRuns == 4) facingBatter.balls4s++;
+        if (event.batRuns == 6) facingBatter.balls6s++;
+        if (event.batRuns % 2 != 0) _rotateStrike();
+      }
     }
 
     if (over.isComplete) {
       bowler.oversBowled++;
       bowler.ballsInCurrentOver = 0;
       if (inn.nonStriker != null) _rotateStrike(); // ADD null guard
+    }
+
+    notifyListeners();
+  }
+
+  // Run-out off a no-ball: bat-runs completed before the run-out still
+  // count, no-ball penalty still applies, but the bowler gets no wicket
+  // credit (run-out is never the bowler's dismissal) and the *specific*
+  // dismissed batsman (striker or non-striker — whichever end was broken)
+  // is passed in explicitly since the model can't infer it.
+  void runOutNoBall(Player dismissed, int batRuns) {
+    final inn = currentMatch!.currentInnings!;
+    final over = inn.currentOver;
+    if (over == null) return;
+
+    final totalRuns = 1 + batRuns; // no-ball penalty + completed runs
+    final event = BallEvent(
+      isNoBall: true,
+      runs: totalRuns,
+      batRuns: batRuns,
+      isWicket: true,
+    );
+    over.balls.add(event);
+
+    final bowler = inn.currentBowler!;
+    bowler.runsConceded += totalRuns;
+    // No wicketsTaken++ here — run-out is never credited to the bowler.
+
+    if (batRuns > 0) {
+      // Bat-runs are always credited to whoever was on strike at the time
+      // of the shot, regardless of which end the run-out happens at.
+      final striker = inn.striker;
+      if (striker != null) {
+        striker.runs += batRuns;
+        if (batRuns == 4) striker.balls4s++;
+        if (batRuns == 6) striker.balls6s++;
+      }
+    }
+
+    dismissed.isOut = true;
+    if (inn.striker?.id == dismissed.id) {
+      inn.striker = null;
+    } else if (inn.nonStriker?.id == dismissed.id) {
+      inn.nonStriker = null;
+    }
+
+    // Odd completed runs would normally rotate strike — but if the
+    // dismissed batsman was mid-run when run out, the surviving batsman's
+    // end depends on which one wasn't dismissed. With only one end now
+    // vacant, no rotation is needed: the remaining batsman keeps their
+    // current end, and _askNextBatsman() will fill the vacant slot.
+
+    if (over.isComplete) {
+      bowler.oversBowled++;
+      bowler.ballsInCurrentOver = 0;
     }
 
     notifyListeners();
@@ -194,6 +264,15 @@ class MatchProvider extends ChangeNotifier {
     } else {
       currentMatch!.state = MatchState.completed;
     }
+    notifyListeners();
+  }
+
+  // Chasing team accepts defeat early (e.g. target unreachable with balls left).
+  // Score stays frozen at concession point; winner getter handles result via
+  // normal score comparison, no special-case needed.
+  void concedeChase() {
+    if (currentMatch!.state != MatchState.innings2) return;
+    currentMatch!.state = MatchState.completed;
     notifyListeners();
   }
 
